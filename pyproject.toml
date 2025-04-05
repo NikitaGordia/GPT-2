@@ -17,6 +17,7 @@ classifiers = [
 ]
 dependencies = [
     "awscli",
+    "dvc>=3.59.1",
     "mkdocs",
     "pip",
     "pytest",
