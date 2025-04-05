@@ -17,7 +17,9 @@ classifiers = [
 ]
 dependencies = [
     "awscli",
+    "datasets>=3.5.0",
     "dvc>=3.59.1",
+    "dvc-s3>=3.2.0",
     "jupyter>=1.1.1",
     "lightning>=2.5.1",
     "loguru>=0.7.3",

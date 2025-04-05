@@ -39,36 +39,22 @@ format:
 	ruff format
 
 
+## Download and process fineweb dataset
+.PHONY: fineweb
+fineweb:
+	python gpt/fineweb.py data/processed/fineweb_edu
+
+
+## Train the model
+.PHONY: train
+train:
+	torchrun --nproc_per_node=1 gpt/train.py
+
 
 ## Run tests
 .PHONY: test
 test:
 	python -m pytest tests
-## Download Data from storage system
-.PHONY: sync_data_down
-sync_data_down:
-	aws s3 sync s3://mykytahlab/data/ \
-		data/ 
-	
-
-## Upload Data to storage system
-.PHONY: sync_data_up
-sync_data_up:
-	aws s3 sync data/ \
-		s3://mykytahlab/data 
-	
-
-
-
-## Set up Python interpreter environment
-.PHONY: create_environment
-create_environment:
-	uv venv --python $(PYTHON_VERSION)
-	@echo ">>> New uv virtual environment created. Activate with:"
-	@echo ">>> Windows: .\\\\.venv\\\\Scripts\\\\activate"
-	@echo ">>> Unix/macOS: source ./.venv/bin/activate"
-
-
 
 
 #################################################################################

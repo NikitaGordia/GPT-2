@@ -1,0 +1,6 @@
+outs:
+- md5: b41865cd4fed0bc98d4af70aa58a27a0.dir
+  size: 19907991488
+  nfiles: 100
+  hash: md5
+  path: fineweb_edu
