@@ -1,0 +1,29 @@
+services:
+  # Base service with common configuration
+  base: &base
+    build: .
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - PYTHONPATH=/app
+    command: ["python", "-m", "pytest", "tests"]
+
+  # Service for training the model
+  train:
+    <<: *base
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: ["torchrun", "--nproc_per_node=1", "gpt/train.py"]
+
+  # Service for data processing
+  data:
+    <<: *base
+    command: ["python", "gpt/fineweb.py", "data/processed/fineweb_edu"]
+

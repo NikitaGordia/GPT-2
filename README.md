@@ -26,7 +26,7 @@ Production ready GPT-2
 │                         the creator's initials, and a short `-` delimited description, e.g.
 │                         `1.0-jqp-initial-data-exploration`.
 │
-├── pyproject.toml     <- Project configuration file with package metadata for 
+├── pyproject.toml     <- Project configuration file with package metadata for
 │                         gpt and configuration for tools like black
 │
 ├── references         <- Data dictionaries, manuals, and all other explanatory materials.
@@ -49,13 +49,53 @@ Production ready GPT-2
     │
     ├── features.py             <- Code to create features for modeling
     │
-    ├── modeling                
-    │   ├── __init__.py 
-    │   ├── predict.py          <- Code to run model inference with trained models          
+    ├── modeling
+    │   ├── __init__.py
+    │   ├── predict.py          <- Code to run model inference with trained models
     │   └── train.py            <- Code to train models
     │
     └── plots.py                <- Code to create visualizations
 ```
 
 --------
+
+## Docker Usage
+
+This project includes Docker support for easy setup and reproducible environments.
+
+### Prerequisites
+
+- Docker and Docker Compose installed on your system
+- NVIDIA Container Toolkit (for GPU support)
+
+### Available Services
+
+1. **Training the model**:
+   ```bash
+   docker compose up train
+   ```
+
+2. **Processing data**:
+   ```bash
+   docker compose up data
+   ```
+
+3. **Running tests**:
+   ```bash
+   make docker-test
+   ```
+
+### Building the Docker image
+
+```bash
+docker compose build
+```
+
+### Custom commands
+
+You can run any command in the Docker container:
+
+```bash
+docker compose run --rm base python -m gpt.your_script
+```
 

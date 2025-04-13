@@ -15,7 +15,7 @@ PYTHON_INTERPRETER = python
 .PHONY: requirements
 requirements:
 	uv sync
-	
+
 
 
 
@@ -61,6 +61,25 @@ test:
 # PROJECT RULES                                                                 #
 #################################################################################
 
+## Build Docker image
+.PHONY: docker-build
+docker-build:
+	docker compose build
+
+## Run model training in Docker
+.PHONY: docker-train
+docker-train:
+	docker compose up train
+
+## Process data in Docker
+.PHONY: docker-data
+docker-data:
+	docker compose up data
+
+## Run tests in Docker
+.PHONY: docker-test
+docker-test:
+	docker compose run --rm base python -m pytest tests
 
 
 #################################################################################
