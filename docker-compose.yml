@@ -1,15 +1,18 @@
 services:
   # Base service with common configuration
   base: &base
-    build: .
+    build:
+      context: .
+      dockerfile: trainer.Dockerfile
     volumes:
-      - ./data:/app/data
-      - ./models:/app/models
+      - ./data:/trainer/data # TODO change relative ./data to absolute path
+      - ./models:/trainer/models
     environment:
-      - PYTHONPATH=/app
+      - PYTHONPATH=/trainer
+      - PYTHONUNBUFFERED=1
     secrets:
-      - source: aws_credentials
-        target: /run/secrets/aws_credentials 
+      - aws_credentials
+    
     command: ["python", "-m", "pytest", "tests"]
 
   # Service for training the model

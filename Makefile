@@ -5,6 +5,7 @@
 PROJECT_NAME = gpt-2
 PYTHON_VERSION = 3.12
 PYTHON_INTERPRETER = python
+DOCKER_BUILDKIT=1
 
 #################################################################################
 # COMMANDS                                                                      #
@@ -84,7 +85,7 @@ docker-test:
 ## Debug Docker container with interactive shell
 .PHONY: docker-debug
 docker-debug:
-	docker compose run --rm --entrypoint=/bin/bash base
+	docker compose run --rm base /bin/bash
 
 
 #################################################################################
