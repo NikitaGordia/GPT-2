@@ -6,6 +6,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-install-project --no-dev
+ADD . /app
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
+
 
 FROM python:3.12-slim-bookworm
 
@@ -17,19 +21,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN groupadd -r app && useradd -r -g app app
 
+RUN mkdir -p /app && chown app:app /app
+
 WORKDIR /app
 
-COPY --from=uv_builder /app /app
-
-COPY . /app
-
-RUN chown -R app:app /app
+COPY --from=uv_builder --chown=app:app /app /app
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Switch to non-root user
 USER app
 
-CMD ["python", "-m", "gpt.train"]
+# Make dvc run without copying .git folder
+RUN dvc config core.no_scm true
+RUN chmod +x /app/entrypoint.sh
+
+ENTRYPOINT ["./entrypoint.sh"]
+
+CMD ["torchrun", "--nproc_per_node=1", "gpt/train.py"]

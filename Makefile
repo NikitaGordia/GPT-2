@@ -79,7 +79,12 @@ docker-data:
 ## Run tests in Docker
 .PHONY: docker-test
 docker-test:
-	docker compose run --rm base python -m pytest tests
+	docker compose up base
+
+## Debug Docker container with interactive shell
+.PHONY: docker-debug
+docker-debug:
+	docker compose run --rm --entrypoint=/bin/bash base
 
 
 #################################################################################

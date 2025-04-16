@@ -31,14 +31,17 @@ venv/
 ENV/
 
 # Data and models (will be mounted as volumes)
-data/
+data/.cache
+data/processed/fineweb_edu
+
 models/
 
 # Jupyter Notebooks
 .ipynb_checkpoints
 
 # DVC
-.dvc/
+.dvc/cache
+.dvc/tmp
 
 # Docker
 .docker/
@@ -48,7 +51,11 @@ models/
 .vscode/
 *.swp
 *.swo
+gpt-2.code-workspace
 
 # Logs
 logs/
 *.log
+
+# Codestyle
+.ruff_cache

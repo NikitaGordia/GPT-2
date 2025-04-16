@@ -3,11 +3,13 @@ services:
   base: &base
     build: .
     volumes:
-      - .:/app
       - ./data:/app/data
       - ./models:/app/models
     environment:
       - PYTHONPATH=/app
+    secrets:
+      - source: aws_credentials
+        target: /run/secrets/aws_credentials 
     command: ["python", "-m", "pytest", "tests"]
 
   # Service for training the model
@@ -22,8 +24,6 @@ services:
               capabilities: [gpu]
     command: ["torchrun", "--nproc_per_node=1", "gpt/train.py"]
 
-  # Service for data processing
-  data:
-    <<: *base
-    command: ["python", "gpt/fineweb.py", "data/processed/fineweb_edu"]
-
+secrets:
+  aws_credentials:
+    file: ~/.aws/credentials
