@@ -5,6 +5,7 @@
 PROJECT_NAME = gpt-2
 PYTHON_VERSION = 3.12
 PYTHON_INTERPRETER = python
+DOCKER_BUILDKIT=1
 
 #################################################################################
 # COMMANDS                                                                      #
@@ -15,7 +16,7 @@ PYTHON_INTERPRETER = python
 .PHONY: requirements
 requirements:
 	uv sync
-	
+
 
 
 
@@ -61,6 +62,25 @@ test:
 # PROJECT RULES                                                                 #
 #################################################################################
 
+## Build Docker image
+.PHONY: docker-build
+docker-build:
+	docker compose build
+
+## Run model training in Docker
+.PHONY: docker-train
+docker-train:
+	docker compose up train
+
+## Run tests in Docker
+.PHONY: docker-test
+docker-test:
+	docker compose up base
+
+## Debug Docker container with interactive shell
+.PHONY: docker-debug
+docker-debug:
+	docker compose run --rm base /bin/bash
 
 
 #################################################################################

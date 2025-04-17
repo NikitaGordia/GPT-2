@@ -1,0 +1,32 @@
+services:
+  # Base service with common configuration
+  base: &base
+    build:
+      context: .
+      dockerfile: trainer.Dockerfile
+    volumes:
+      - ./data:/trainer/data
+      - ./models:/trainer/models
+    environment:
+      - PYTHONPATH=/trainer
+      - PYTHONUNBUFFERED=1
+    secrets:
+      - aws_credentials
+    
+    command: ["python", "-m", "pytest", "tests"]
+
+  # Service for training the model
+  train:
+    <<: *base
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: ["torchrun", "--nproc_per_node=1", "gpt/train.py"]
+
+secrets:
+  aws_credentials:
+    file: ~/.aws/credentials
