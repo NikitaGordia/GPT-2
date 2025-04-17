@@ -72,11 +72,6 @@ docker-build:
 docker-train:
 	docker compose up train
 
-## Process data in Docker
-.PHONY: docker-data
-docker-data:
-	docker compose up data
-
 ## Run tests in Docker
 .PHONY: docker-test
 docker-test:

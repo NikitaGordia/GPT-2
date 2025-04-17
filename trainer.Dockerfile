@@ -23,4 +23,5 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 ENV PATH="/trainer/.venv/bin:$PATH"
 RUN chmod +x ./entrypoints/trainer.sh
 
+# After entrypoint runs on trainer user
 ENTRYPOINT [ "./entrypoints/trainer.sh" ]

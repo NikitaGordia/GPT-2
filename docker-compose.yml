@@ -5,7 +5,7 @@ services:
       context: .
       dockerfile: trainer.Dockerfile
     volumes:
-      - ./data:/trainer/data # TODO change relative ./data to absolute path
+      - ./data:/trainer/data
       - ./models:/trainer/models
     environment:
       - PYTHONPATH=/trainer
