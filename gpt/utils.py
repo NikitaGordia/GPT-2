@@ -5,15 +5,15 @@ import typer
 
 
 class Timeit:
-    def __init__(self, name=None):
+    def __init__(self, use_cuda: bool = False) -> None:
         """
         Initialize the context manager for time measurement.
 
         Args:
-            name (str, optional): A name to identify this timer. If None,
-                                  "Function" will be used as a default.
+            use_cuda (bool, optional): Whether to synchronize CUDA operations for accurate timing.
+                                      Defaults to False.
         """
-        self.name = name if name else "Function"
+        self.use_cuda = use_cuda
 
     def __enter__(self):
         """
@@ -24,17 +24,17 @@ class Timeit:
         """
         self.start_time = time.time()
 
-        if torch.cuda.is_available():
+        if self.use_cuda:
             torch.cuda.synchronize()
 
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, *_) -> bool:
         return False
 
-    def now(self):
+    def now(self) -> float:
         # Handle PyTorch CUDA timing if available
-        if torch.cuda.is_available():
+        if self.use_cuda:
             torch.cuda.synchronize()
 
         # Standard Python timing
@@ -44,7 +44,7 @@ class Timeit:
         return elapsed_time
 
 
-def count_parameters(model):
+def count_parameters(model: torch.nn.Module) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
@@ -58,6 +58,6 @@ def detect_device(use_cpu: bool = False) -> str:
     return device
 
 
-def setup_typer(name) -> typer.Typer:
+def setup_typer(name: str) -> typer.Typer:
     typer_obj = typer.Typer(name=name, pretty_exceptions_show_locals=False)
     return typer_obj

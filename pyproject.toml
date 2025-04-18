@@ -40,6 +40,7 @@ dev = [
     "mkdocs",
     "ruff",
     "seaborn>=0.13.2",
+    "pre-commit>=4.2.0"
 ]
 
 [tool.ruff]

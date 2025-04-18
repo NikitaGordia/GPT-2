@@ -6,7 +6,7 @@ services:
       dockerfile: trainer.Dockerfile
     volumes:
       - ./data:/trainer/data
-      - ./models:/trainer/models
+      - ./models:/trainer/models # TODO add HF_HOME with .cache mounting for speeding up
     environment:
       - PYTHONPATH=/trainer
       - PYTHONUNBUFFERED=1

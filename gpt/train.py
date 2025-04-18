@@ -13,10 +13,11 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
 import typer
 
-from data import DataLoaderLite
-from hellaswag import evaluate as hs_validation
-from model import GPT, CosineDecayWarmup, GPTConfig
-from utils import Timeit, count_parameters, detect_device, setup_typer
+from gpt.data import DataLoaderLite
+from gpt.hellaswag import evaluate as hs_validation
+from gpt.learning_rate import CosineDecayWarmup
+from gpt.model import GPT, GPTConfig
+from gpt.utils import Timeit, count_parameters, detect_device, setup_typer
 
 app = setup_typer("train")
 
@@ -38,6 +39,10 @@ class TrainingEnvironment:
         if "":
             return [1 for i in range(1)]
         return "cuda" if self.device.startswith("cuda") else "cpu"
+
+    @property
+    def is_cuda(self) -> bool:
+        return self.device_type == "cuda"
 
 
 def generate(text: str, num_return_sequences: int = 5, max_length: int = 30) -> None:
@@ -238,7 +243,7 @@ def train(
         model = DDP(model, device_ids=[ddp_local_rank])
 
     for step in range(max_steps):
-        with Timeit() as timeit:
+        with Timeit(use_cuda=env.is_cuda) as timeit:
             if (step + 1) % validation_step == 0 or step == max_steps - 1:
                 validation(
                     model,
