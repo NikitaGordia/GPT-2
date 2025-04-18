@@ -1,14 +1,6 @@
 # GPT-2
 
-<a target="_blank" href="https://cookiecutter-data-science.drivendata.org/">
-    <img src="https://img.shields.io/badge/CCDS-Project%20template-328F97?logo=cookiecutter" />
-</a>
-<img src="https://img.shields.io/badge/Python-3.12-blue?logo=python" />
-<img src="https://img.shields.io/badge/Docker-Supported-blue?logo=docker" />
-<img src="https://img.shields.io/badge/uv-Package%20Manager-blue?logo=python" />
-<img src="https://img.shields.io/badge/PyTorch-Supported-orange?logo=pytorch" />
-<img src="https://img.shields.io/badge/GPU-NVIDIA-green?logo=nvidia" />
-<img src="https://img.shields.io/badge/DVC-Data%20Version%20Control-945DD6?logo=dvc" />
+<a target="_blank" href="https://cookiecutter-data-science.drivendata.org/"><img src="https://img.shields.io/badge/CCDS-Project%20template-328F97?logo=cookiecutter" /></a> <img src="https://img.shields.io/badge/Python-3.12-blue?logo=python" /> <img src="https://img.shields.io/badge/Docker-Supported-blue?logo=docker" /> <img src="https://img.shields.io/badge/uv-Package%20Manager-blue?logo=python" /> <img src="https://img.shields.io/badge/PyTorch-Supported-orange?logo=pytorch" /> <img src="https://img.shields.io/badge/GPU-NVIDIA-green?logo=nvidia" /> <img src="https://img.shields.io/badge/DVC-Data%20Version%20Control-945DD6?logo=dvc" />
 
 Production ready GPT-2
 
