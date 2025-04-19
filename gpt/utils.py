@@ -1,4 +1,6 @@
+import os
 import time
+from typing import Callable, Optional
 
 import torch
 import typer
@@ -61,3 +63,22 @@ def detect_device(use_cpu: bool = False) -> str:
 def setup_typer(name: str) -> typer.Typer:
     typer_obj = typer.Typer(name=name, pretty_exceptions_show_locals=False)
     return typer_obj
+
+
+def handle_cache_dir(cache_dir: Optional[str], sub_dir: str, log_fn: Callable[[str], None]) -> str:
+    """Handle the cache directory argument.
+
+    Args:
+        cache_dir: The cache directory argument provided by the user
+        sub_dir: Subdirectory within the cache directory to use
+
+    Returns:
+        The resolved cache directory path
+    """
+    if cache_dir is None:
+        cache_dir = os.environ.get("CACHE_DIR")
+        if cache_dir is None:
+            raise ValueError("cache_dir not specified and CACHE_DIR environment variable not set")
+        log_fn(f"Using CACHE_DIR environment variable: {cache_dir}")
+    cache_dir = os.path.join(cache_dir, sub_dir)
+    return cache_dir

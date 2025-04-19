@@ -35,6 +35,14 @@ class TrainingEnvironment:
         return self.ddp_config is not None
 
     @property
+    def ddp_rank(self) -> bool:
+        return self.ddp_config[0] if self.ddp else 0
+
+    @property
+    def is_master(self) -> bool:
+        return self.ddp_rank == 0
+
+    @property
     def device_type(self) -> str:
         return "cuda" if self.device.startswith("cuda") else "cpu"
 

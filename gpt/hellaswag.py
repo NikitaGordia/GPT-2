@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Callable, Dict, Generator, List, Tuple
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
 from loguru import logger
 import requests
@@ -13,7 +13,7 @@ from tqdm import tqdm
 from transformers import GPT2LMHeadModel
 import typer
 
-from gpt.utils import setup_typer
+from gpt.utils import handle_cache_dir, setup_typer
 
 # URLs for the HellaSwag dataset files
 HELLASWAGS: Dict[str, str] = {
@@ -50,13 +50,14 @@ def download_file(url: str, fname: str, chunk_size: int = 1024) -> None:
             bar.update(size)
 
 
-def download(split: str, cache_dir: str, ddp_rank: int = 0) -> str:
+def download(split: str, cache_dir: str, env, force=False) -> str:
     """Download a specific split of the HellaSwag dataset if not already cached.
 
     Args:
         split: Dataset split to download ('train', 'val', or 'test')
         cache_dir: Directory to cache the downloaded files
-        ddp_rank: Current process rank in DDP setup
+        env: Training environment with device and configuration settings
+        force: Whether to force download even if the file already exists
 
     Returns:
         Path to the downloaded/cached file
@@ -65,8 +66,8 @@ def download(split: str, cache_dir: str, ddp_rank: int = 0) -> str:
     data_url = HELLASWAGS[split]
 
     data_filename = os.path.join(cache_dir, f"hellaswag_{split}.json")
-    if not os.path.exists(data_filename) and ddp_rank == 0:  # Only download on rank 0
-        print(f"Downloading {data_url} to {data_filename}...")
+    if (not os.path.exists(data_filename) or force) and env.is_master:
+        env.logger(f"Downloading {data_url} to {data_filename}...")
         download_file(data_url, data_filename)
 
     if dist.is_initialized():
@@ -74,17 +75,18 @@ def download(split: str, cache_dir: str, ddp_rank: int = 0) -> str:
     return data_filename
 
 
-def iterate_examples(split: str, cache_dir: str) -> Generator[Dict[str, Any], None, None]:
+def iterate_examples(split: str, cache_dir: str, env) -> Generator[Dict[str, Any], None, None]:
     """Iterate through examples in a specific split of the HellaSwag dataset.
 
     Args:
         split: Dataset split to iterate through ('train', 'val', or 'test')
         cache_dir: Directory where dataset files are cached
+        env: Training environment with device and configuration settings
 
     Yields:
         Dictionary containing a single example from the dataset
     """
-    fname = download(split, cache_dir)
+    fname = download(split, cache_dir, env)
     with open(fname, "r") as f:
         for line in f:
             example = json.loads(line)
@@ -162,7 +164,7 @@ def evaluate(
 
     ddp_rank, ddp_world_size = env.ddp_config if env.ddp else (0, 1)
 
-    for ix, example in tqdm(enumerate(iterate_examples("val", cache_dir))):
+    for ix, example in tqdm(enumerate(iterate_examples("val", cache_dir, env))):
         if ix % ddp_world_size != ddp_rank:
             continue
 
@@ -228,8 +230,11 @@ def evaluate_pretrained(
     device: str = typer.Option(
         "cuda", "--device", "-d", help="Device to run evaluation on (cuda/cpu)"
     ),
-    cache_dir: str = typer.Option(
-        "data/.cache", "--cache-dir", "-c", help="Directory to cache dataset files"
+    cache_dir: Optional[str] = typer.Option(
+        None,
+        "--cache-dir",
+        "-c",
+        help="Directory to cache dataset files (defaults to CACHE_DIR env var)",
     ),
     use_autocast: bool = typer.Option(
         False, "--autocast", help="Enable automatic mixed precision"
@@ -257,6 +262,7 @@ def evaluate_pretrained(
         use_tf32=use_tf32,
         ddp_config=None,
     )
+    cache_dir = handle_cache_dir(cache_dir, "hellaswag", env)
 
     model = GPT2LMHeadModel.from_pretrained(model_type)
     model.to(env.device)
@@ -271,6 +277,46 @@ def evaluate_pretrained(
         f"Total examples: {num_total}, Accuracy: {num_correct / num_total * 100:.1f}%, "
         f"NormAccuracy: {num_correct_norm / num_total * 100:.1f}%"
     )
+
+
+@app.command()
+def download_dataset(
+    split: str = typer.Argument(help="Dataset split to download ('train', 'val', or 'test')"),
+    cache_dir: Optional[str] = typer.Option(
+        None,
+        "--cache-dir",
+        "-c",
+        help="Directory to cache dataset files (defaults to CACHE_DIR env var)",
+    ),
+) -> None:
+    """
+    Download a specific split of the HellaSwag dataset.
+
+    This command can be used to force re-download the dataset files even if they already exist.
+
+    Args:
+        split: Required. Dataset split to download ('train', 'val', or 'test')
+        cache_dir: Directory to cache dataset files (defaults to CACHE_DIR env var)
+    """
+    from gpt.train import TrainingEnvironment
+
+    env = TrainingEnvironment(
+        device="cpu",
+        logger=logger.info,
+        use_autocast=False,
+        use_tf32=False,
+        ddp_config=None,
+    )
+    cache_dir = handle_cache_dir(cache_dir, "hellaswag", env.logger)
+
+    # Validate split
+    if split not in HELLASWAGS:
+        valid_splits = ", ".join(HELLASWAGS.keys())
+        raise ValueError(f"Invalid split: {split}. Valid splits are: {valid_splits}")
+
+    # Download the file
+    data_filename = download(split, cache_dir, env, force=True)
+    logger.success(f"Downloaded {split} split to {data_filename}")
 
 
 if __name__ == "__main__":
