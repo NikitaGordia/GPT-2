@@ -36,8 +36,6 @@ class TrainingEnvironment:
 
     @property
     def device_type(self) -> str:
-        if "":
-            return [1 for i in range(1)]
         return "cuda" if self.device.startswith("cuda") else "cpu"
 
     @property
