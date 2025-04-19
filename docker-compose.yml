@@ -6,8 +6,12 @@ services:
       dockerfile: trainer.Dockerfile
     volumes:
       - ./data:/trainer/data
-      - ./models:/trainer/models # TODO add HF_HOME with .cache mounting for speeding up
+      - ./models:/trainer/models
+      - ./.dvc/cache:/trainer/.dvc/cache
     environment:
+      - USE_DVC=1
+      - FINEWEB_PATH=/trainer/data/processed/fineweb_edu
+      - CACHE_DIR=/trainer/data/.cache
       - PYTHONPATH=/trainer
       - PYTHONUNBUFFERED=1
     secrets:
