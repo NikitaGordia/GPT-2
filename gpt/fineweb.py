@@ -11,6 +11,8 @@ from tiktoken.core import Encoding
 from tqdm import tqdm
 import typer
 
+from gpt.utils import handle_cache_dir, handle_env
+
 
 def tokenize(doc: str, enc: Encoding, eot: int) -> np.ndarray:
     """Tokenize a document using the provided encoder.
@@ -116,6 +118,7 @@ class ShardBuffer:
             self.all_tokens_np[self.token_count : self.token_count + remainder] = tokens[
                 :remainder
             ]
+            self.token_count += remainder
             self.save_shard()
             self.shard_index += 1
 
@@ -140,15 +143,17 @@ class ShardBuffer:
 class FinewebProcessor:
     """Class for downloading and processing the Fineweb dataset."""
 
-    def __init__(self, local_dir: str, remote_name: str, shard_size: int):
+    def __init__(self, local_dir: str, cache_dir: str, remote_name: str, shard_size: int):
         """Initialize the Fineweb processor.
 
         Args:
             local_dir: Directory to save processed files
+            cache_dir: Directory to cache dataset files
             remote_name: Remote dataset name
             shard_size: Size of each shard in tokens
         """
         self.local_dir = local_dir
+        self.cache_dir = cache_dir
         self.remote_name = remote_name
         self.shard_size = shard_size
 
@@ -165,7 +170,12 @@ class FinewebProcessor:
         """
         logger.info(f"Loading dataset {self.remote_name}")
         try:
-            return load_dataset("HuggingFaceFW/fineweb-edu", name=self.remote_name, split="train")
+            return load_dataset(
+                "HuggingFaceFW/fineweb-edu",
+                name=self.remote_name,
+                split="train",
+                cache_dir=self.cache_dir,
+            )
         except Exception as e:
             logger.error(f"Failed to load dataset: {e}")
             raise
@@ -206,18 +216,33 @@ class FinewebProcessor:
 
 
 def download_and_process(
-    local_dir: str = typer.Argument(..., help="Directory to save processed files"),
+    local_dir: Optional[str] = typer.Option(
+        None,
+        "--local-dir",
+        "-d",
+        help="Directory to save processed files (defaults to FINEWEB_PATH env var)",
+    ),
+    cache_dir: Optional[str] = typer.Option(
+        None,
+        "--cache-dir",
+        "-c",
+        help="Directory to cache dataset files (defaults to CACHE_DIR env var)",
+    ),
     remote_name: str = typer.Option("sample-10BT", help="Remote dataset name"),
     shard_size: int = typer.Option(int(1e8), help="Size of each shard"),
 ) -> None:
     """Download and process the Fineweb dataset.
 
     Args:
-        local_dir: Directory to save processed files
+        local_dir: Directory to save processed files (defaults to FINEWEB_PATH env var)
+        cache_dir: Directory to cache dataset files (defaults to CACHE_DIR env var)
         remote_name: Remote dataset name
         shard_size: Size of each shard in tokens
     """
-    processor = FinewebProcessor(local_dir, remote_name, shard_size)
+    local_dir = handle_env(local_dir, "FINEWEB_PATH", logger.info)
+    cache_dir = handle_cache_dir(cache_dir, sub_dir="huggingface", log_fn=logger.info)
+
+    processor = FinewebProcessor(local_dir, cache_dir, remote_name, shard_size)
     processor.process()
 
 

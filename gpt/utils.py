@@ -1,4 +1,6 @@
+import os
 import time
+from typing import Callable, Optional
 
 import torch
 import typer
@@ -61,3 +63,17 @@ def detect_device(use_cpu: bool = False) -> str:
 def setup_typer(name: str) -> typer.Typer:
     typer_obj = typer.Typer(name=name, pretty_exceptions_show_locals=False)
     return typer_obj
+
+
+def handle_cache_dir(cache_dir: Optional[str], sub_dir: str, log_fn: Callable[[str], None]) -> str:
+    cache_dir = os.path.join(handle_env(cache_dir, "CACHE_DIR", log_fn), sub_dir)
+    return cache_dir
+
+
+def handle_env(value: Optional[str], key: str, log_fn: Callable[[str], None]) -> str:
+    if value is None:
+        value = os.environ.get(key)
+        if value is None:
+            raise ValueError(f"{key} not specified and environment variable not set")
+        log_fn(f"Using {key} environment variable: {value}")
+    return value
