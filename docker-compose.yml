@@ -4,6 +4,8 @@ services:
     build:
       context: .
       dockerfile: trainer.Dockerfile
+    container_name: gpt-trainer
+    image: ${REGISTRY_URL}/gpt-trainer:${BUILD_TAG}
     volumes:
       - ./data:/trainer/data
       - ./models:/trainer/models

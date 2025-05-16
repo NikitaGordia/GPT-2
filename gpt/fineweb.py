@@ -11,7 +11,7 @@ from tiktoken.core import Encoding
 from tqdm import tqdm
 import typer
 
-from gpt.utils import handle_cache_dir
+from gpt.utils import handle_cache_dir, handle_env
 
 
 def tokenize(doc: str, enc: Encoding, eot: int) -> np.ndarray:
@@ -235,19 +235,12 @@ def download_and_process(
 
     Args:
         local_dir: Directory to save processed files (defaults to FINEWEB_PATH env var)
+        cache_dir: Directory to cache dataset files (defaults to CACHE_DIR env var)
         remote_name: Remote dataset name
         shard_size: Size of each shard in tokens
     """
-    # Use environment variable if local_dir is not specified
-    if local_dir is None:
-        local_dir = os.environ.get("FINEWEB_PATH")
-        if local_dir is None:
-            raise ValueError(
-                "local_dir not specified and FINEWEB_PATH environment variable not set"
-            )
-        logger.info(f"Using FINEWEB_PATH environment variable: {local_dir}")
-
-    cache_dir = handle_cache_dir(cache_dir, "huggingface", logger.info)
+    local_dir = handle_env(local_dir, "FINEWEB_PATH", logger.info)
+    cache_dir = handle_cache_dir(cache_dir, sub_dir="huggingface", log_fn=logger.info)
 
     processor = FinewebProcessor(local_dir, cache_dir, remote_name, shard_size)
     processor.process()

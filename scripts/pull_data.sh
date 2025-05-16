@@ -28,8 +28,11 @@ success() {
 # Function to pull data with DVC
 pull_data_with_dvc() {
   log "Pulling data using DVC..."
-  # Configure DVC to not require git
-  dvc config core.no_scm true
+  # Configure DVC to not require git only if .git directory doesn't exist
+  if [ ! -d ".git" ]; then
+    log "No .git directory found, configuring DVC to work without git..."
+    dvc config core.no_scm true
+  fi
   if dvc pull; then
     success "Data successfully pulled with DVC"
     return 0
