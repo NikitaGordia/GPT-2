@@ -1,68 +1,41 @@
-from dataclasses import dataclass
-import os
-from typing import Callable, Optional, Tuple
+from typing import Callable
 
+import hydra
 from loguru import logger
+from omegaconf import DictConfig
 import tiktoken
 import torch
 import torch.distributed as dist
-from torch.distributed import destroy_process_group, init_process_group
+from torch.distributed import destroy_process_group
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
-import typer
 
 from gpt.data import DataLoaderLite
-from gpt.hellaswag import evaluate as hs_validation
+from gpt.hellaswag.evaluate import evaluate as hs_validation
 from gpt.learning_rate import CosineDecayWarmup
 from gpt.model import GPT, GPTConfig
-from gpt.utils import Timeit, count_parameters, detect_device, setup_typer
-
-app = setup_typer("train")
+from gpt.utils import RuntimeEnvironment, Timeit, configure_logger, count_parameters
 
 
-@dataclass
-class TrainingEnvironment:
-    device: str
-    logger: Callable[[str], None]
-    use_autocast: bool = False
-    use_tf32: bool = False
-    ddp_config: Optional[Tuple[int, int]] = None
-
-    @property
-    def ddp(self) -> bool:
-        return self.ddp_config is not None
-
-    @property
-    def ddp_rank(self) -> bool:
-        return self.ddp_config[0] if self.ddp else 0
-
-    @property
-    def is_master(self) -> bool:
-        return self.ddp_rank == 0
-
-    @property
-    def device_type(self) -> str:
-        return "cuda" if self.device.startswith("cuda") else "cpu"
-
-    @property
-    def is_cuda(self) -> bool:
-        return self.device_type == "cuda"
-
-
-def generate(text: str, num_return_sequences: int = 5, max_length: int = 30) -> None:
-    device = detect_device()
-
-    model = GPT.from_pretrained("gpt2")
+# @hydra.main(version_base=None, config_path="../conf", config_name="config")
+def generate(
+    cfg: DictConfig,
+    env: RuntimeEnvironment,
+    text: str,
+    num_return_sequences: int = 5,
+    max_length: int = 30,
+) -> None:
+    model = GPT.from_pretrained("gpt2", cfg)
     model.eval()
-    model.to(device)
+    model.to(env.device)
 
     enc = tiktoken.get_encoding("gpt2")
     tokens = enc.encode(text)
     tokens = torch.tensor(tokens, dtype=torch.long)
     tokens = tokens.unsqueeze(0).repeat(num_return_sequences, 1)
-    x = tokens.to(device)
+    x = tokens.to(env.device)
 
     torch.manual_seed(42)
     torch.cuda.manual_seed(42)
@@ -88,7 +61,7 @@ def generate(text: str, num_return_sequences: int = 5, max_length: int = 30) -> 
 def validate_model(
     model: nn.Module,
     loader,
-    env: TrainingEnvironment,
+    env: RuntimeEnvironment,
     n_steps: int = 20,
 ) -> torch.Tensor:
     model.eval()
@@ -117,152 +90,129 @@ def validate_model(
 @torch.no_grad()
 def validation(
     model: nn.Module,
-    loader,
-    env: TrainingEnvironment,
-    n_steps: int = 20,
+    loader: DataLoaderLite,
+    env: RuntimeEnvironment,
+    cfg: DictConfig,
     hs_val: bool = False,
 ) -> None:
     val_loss_acc = validate_model(
         model,
         loader,
         env,
-        n_steps=n_steps,
+        n_steps=cfg.training.validation.n_steps,
     )
 
-    env.logger(f"validation loss: {val_loss_acc.item():.4f}")
+    logger.info(f"validation loss: {val_loss_acc.item():.4f}")
 
     if hs_val:
         num_total, num_correct, num_correct_norm = hs_validation(
+            cfg.data.hellaswag,
+            env,
             model,
-            tiktoken.get_encoding("gpt2"),
-            env.device,
-            "data/.cache",
-            use_tf32=False,
-            ddp_config=env.ddp_config,
-            use_autocast=env.use_autocast,
+            tiktoken.get_encoding(cfg.training.validation.hellaswag.encoder),
         )
-        env.logger(
+        logger.info(
             f"hs_val Accuracy: {num_correct / num_total * 100:.1f}%, NormAccuracy: {num_correct_norm / num_total * 100:.1f}.%"
         )
 
 
-def setup_logger(master_process: bool, log_file: str) -> None:
+def setup_logger(master_process: bool, log_file: str) -> Callable[[str], None]:
+    """Set up logging based on whether this is the master process.
+
+    Args:
+        master_process: Whether this is the master process
+        log_file: Path to the log file
+
+    Returns:
+        A logging function that takes a string message
+    """
     if not master_process:
-        return lambda msg: None
+        # Create a no-op logger for non-master processes
+        return lambda _: None
 
     logger.add(log_file, rotation="10 MB", level="INFO")
     logger.info(f"Logs will be saved to {log_file}")
     return logger.info
 
 
-@app.command()
-def train(
-    batch_size: int = typer.Option(2**19, help="Total batch size for training"),
-    micro_batch_size: int = typer.Option(4, help="Micro batch size for gradient accumulation"),
-    seq_length: int = typer.Option(1024, help="Sequence length for training"),
-    vocab_size: int = typer.Option(50304, help="Vocabulary size"),
-    lr_max: float = typer.Option(6e-4, help="Maximum learning rate"),
-    lr_min_factor: float = typer.Option(0.1, help="Minimum learning rate factor"),
-    weight_decay: float = typer.Option(0.1, help="Weight decay"),
-    warmup_steps: int = typer.Option(10, help="Number of warmup steps"),
-    max_steps: int = typer.Option(19073, help="Maximum number of training steps"),
-    validation_step: int = typer.Option(10, help="Validate every N steps"),
-    validation_n_steps: int = typer.Option(20, help="Number of validation steps"),
-    grad_clip: float = typer.Option(1.0, help="Gradient clipping value"),
-    data_path: str = typer.Option("data/processed/fineweb_edu", help="Path to training data"),
-    log_file: str = typer.Option("logs/train.txt", help="Directory for logs"),
-    use_tf32: bool = typer.Option(False, help="Use TF32 precision"),
-    use_autocast: bool = typer.Option(False, help="Use automatic mixed precision"),
-    compile_model: bool = typer.Option(False, help="Use torch.compile"),
-) -> None:
-    ddp = int(os.environ.get("RANK", -1)) != -1
-    if ddp:
-        # use of DDP atm demands CUDA, we set the device appropriately according to rank
-        assert torch.cuda.is_available(), "for now i think we need CUDA for DDP"
-        init_process_group(backend="nccl")
-        ddp_rank = int(os.environ["RANK"])
-        ddp_local_rank = int(os.environ["LOCAL_RANK"])
-        ddp_world_size = int(os.environ["WORLD_SIZE"])
-        device = f"cuda:{ddp_local_rank}"
-        torch.cuda.set_device(device)
-        master_process = ddp_rank == 0  # this process will do logging, checkpointing etc.
-        ddp_config = (ddp_rank, ddp_world_size)
-    else:
-        # vanilla, non-DDP run
-        ddp_rank = 0
-        ddp_local_rank = 0
-        ddp_world_size = 1
-        master_process = True
-        ddp_config = None
-        device = detect_device()
+@hydra.main(version_base=None, config_path="../conf", config_name="config")
+def train(cfg: DictConfig) -> None:
+    # Setup environment
+    env = RuntimeEnvironment.from_hydra_config(cfg.env)
+    configure_logger(env.ddp_rank)
+    logger.info(f"Using {env.device} device.")
 
-    env = TrainingEnvironment(
-        device=device,
-        logger=setup_logger(master_process, log_file),
-        use_autocast=use_autocast,
-        use_tf32=use_tf32,
-        ddp_config=ddp_config,
-    )
-    env.logger(f"Using {device} device.")
-
-    if use_tf32:
+    if env.use_tf32:
         torch.set_float32_matmul_precision("high")
-        env.logger("Using tf32.")
+        logger.info("Using tf32.")
 
+    # Setup data loaders
     train_loader = DataLoaderLite(
-        data_path,
-        micro_batch_size,
-        seq_length,
+        cfg.data.fineweb.path,
+        cfg.training.micro_batch_size,
+        cfg.training.seq_length,
         split="train",
-        env=env,
+        ddp_config=env.ddp_config,
     )
     val_loader = DataLoaderLite(
-        data_path,
-        micro_batch_size,
-        seq_length,
+        cfg.data.fineweb.path,
+        cfg.training.micro_batch_size,
+        cfg.training.seq_length,
         split="val",
-        env=env,
+        ddp_config=env.ddp_config,
     )
 
-    tokens_per_micro_batch = micro_batch_size * seq_length * ddp_world_size
-    assert batch_size % tokens_per_micro_batch == 0, (
+    # Calculate gradient accumulation steps
+    tokens_per_micro_batch = (
+        cfg.training.micro_batch_size * cfg.training.seq_length * env.ddp_world_size
+    )
+    assert cfg.training.batch_size % tokens_per_micro_batch == 0, (
         "make sure batch_size is divisible by micro_batch_size * seq_length"
     )
-    grad_accum_steps = batch_size // tokens_per_micro_batch
-    env.logger(f"gradient accumulation steps: {grad_accum_steps}")
+    grad_accum_steps = cfg.training.batch_size // tokens_per_micro_batch
+    logger.info(f"gradient accumulation steps: {grad_accum_steps}")
 
-    model = GPT(GPTConfig(vocab_size=vocab_size))
-    env.logger(f"Model size: {count_parameters(model):,}")
+    # Setup model
+    model = GPT(GPTConfig.from_hydra_config(cfg.model))
+    logger.info(f"Model size: {count_parameters(model):,}")
     model.to(env.device)
-    if compile_model:
-        with Timeit() as timeit:
-            env.logger("Compiling the model...")
-            model = torch.compile(model)
-            env.logger(f"Model is compiled within {timeit.now():.3f} seconds.")
 
+    if cfg.training.compile_model:
+        with Timeit() as timeit:
+            logger.info("Compiling the model...")
+            model = torch.compile(model)
+            logger.info(f"Model is compiled within {timeit.now():.3f} seconds.")
+
+    # Setup optimizer and learning rate scheduler
     optimizer = model.configure_optimizers(
-        weight_decay=weight_decay, learning_rate=lr_max, env=env
+        weight_decay=cfg.training.optimizer.weight_decay,
+        learning_rate=cfg.training.lr.max,
+        device_type=env.device_type,
     )
-    lr_scheduler = CosineDecayWarmup(lr_max, lr_max * lr_min_factor, warmup_steps, max_steps)
+    lr_scheduler = CosineDecayWarmup.from_hydra_config(cfg.training)
 
     if env.ddp:
-        model = DDP(model, device_ids=[ddp_local_rank])
+        model = DDP(model, device_ids=[env.ddp_local_rank])
 
-    for step in range(max_steps):
+    # Training loop
+    for step in range(cfg.training.max_steps):
         with Timeit(use_cuda=env.is_cuda) as timeit:
-            if (step + 1) % validation_step == 0 or step == max_steps - 1:
+            if (
+                step + 1
+            ) % cfg.training.validation.step == 0 or step == cfg.training.max_steps - 1:
                 validation(
                     model,
                     val_loader,
                     env,
-                    n_steps=validation_n_steps,
-                    hs_val=not compile_model,
+                    cfg,
+                    hs_val=cfg.training.validation.hellaswag.enabled
+                    and not cfg.training.compile_model,
                 )
 
             optimizer.zero_grad()
             loss_acc = 0
 
-            iterator = tqdm(range(grad_accum_steps)) if master_process else range(grad_accum_steps)
+            iterator = tqdm(range(grad_accum_steps)) if env.is_master else range(grad_accum_steps)
             for it in iterator:
                 X, Y = train_loader.next_batch()
                 X, Y = X.to(env.device), Y.to(env.device)
@@ -280,7 +230,9 @@ def train(
             if env.ddp:
                 dist.all_reduce(loss_acc, op=dist.ReduceOp.AVG)
 
-            norm = torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+            norm = torch.nn.utils.clip_grad_norm_(
+                model.parameters(), cfg.training.optimizer.grad_clip
+            )
 
             lr = lr_scheduler.get_lr(step)
             for param_group in optimizer.param_groups:
@@ -289,9 +241,9 @@ def train(
             optimizer.step()
             elapsed = timeit.now()
             processed_tokens = (
-                grad_accum_steps * (train_loader.B * train_loader.T) * ddp_world_size
+                grad_accum_steps * (train_loader.B * train_loader.T) * env.ddp_world_size
             )
-            env.logger(
+            logger.info(
                 f"step {step}, loss: {loss_acc.item():.6f}, norm: {norm:.4f}, lr: {lr:.4e}, elapsed: {elapsed * 1000:.1f} ms, tok/sec: {processed_tokens / elapsed:.1f}"
             )
 
@@ -300,4 +252,4 @@ def train(
 
 
 if __name__ == "__main__":
-    app()
+    train()

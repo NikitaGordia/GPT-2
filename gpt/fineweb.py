@@ -4,14 +4,13 @@ import os
 from typing import Optional, Tuple
 
 from datasets import Dataset, load_dataset
+import hydra
 from loguru import logger
 import numpy as np
+from omegaconf import DictConfig
 import tiktoken
 from tiktoken.core import Encoding
 from tqdm import tqdm
-import typer
-
-from gpt.utils import handle_cache_dir, handle_env
 
 
 def tokenize(doc: str, enc: Encoding, eot: int) -> np.ndarray:
@@ -215,36 +214,20 @@ class FinewebProcessor:
             raise
 
 
-def download_and_process(
-    local_dir: Optional[str] = typer.Option(
-        None,
-        "--local-dir",
-        "-d",
-        help="Directory to save processed files (defaults to FINEWEB_PATH env var)",
-    ),
-    cache_dir: Optional[str] = typer.Option(
-        None,
-        "--cache-dir",
-        "-c",
-        help="Directory to cache dataset files (defaults to CACHE_DIR env var)",
-    ),
-    remote_name: str = typer.Option("sample-10BT", help="Remote dataset name"),
-    shard_size: int = typer.Option(int(1e8), help="Size of each shard"),
-) -> None:
+@hydra.main(version_base=None, config_path="../conf", config_name="config")
+def download_and_process(cfg: DictConfig) -> None:
     """Download and process the Fineweb dataset.
 
     Args:
-        local_dir: Directory to save processed files (defaults to FINEWEB_PATH env var)
-        cache_dir: Directory to cache dataset files (defaults to CACHE_DIR env var)
-        remote_name: Remote dataset name
-        shard_size: Size of each shard in tokens
+        cfg: Hydra configuration
     """
-    local_dir = handle_env(local_dir, "FINEWEB_PATH", logger.info)
-    cache_dir = handle_cache_dir(cache_dir, sub_dir="huggingface", log_fn=logger.info)
 
-    processor = FinewebProcessor(local_dir, cache_dir, remote_name, shard_size)
+    fw_cfg = cfg.data.fineweb
+    processor = FinewebProcessor(
+        fw_cfg.path, cfg.data.hugging_face.cache_dir, fw_cfg.remote_name, fw_cfg.shard_size
+    )
     processor.process()
 
 
 if __name__ == "__main__":
-    typer.run(download_and_process)
+    download_and_process()

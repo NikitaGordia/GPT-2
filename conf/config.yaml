@@ -1,0 +1,20 @@
+# @package _global_
+
+# Default configuration for GPT-2 training
+
+defaults:
+  - model: gpt2
+  - training: default
+  - data: default
+  - env: default
+  - _self_
+
+# Hydra-specific configuration
+hydra:
+  run:
+    dir: logs/hydra/${hydra.job.name}/singlerun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: logs/hydra/${hydra.job.name}/multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}
+  job:
+    chdir: False

@@ -2,6 +2,9 @@ from dataclasses import dataclass
 import inspect
 from typing import Any, Dict, List, Optional, Tuple
 
+import hydra
+from loguru import logger
+from omegaconf import DictConfig
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,11 +14,17 @@ import torch.nn.functional as F
 class GPTConfig:
     """Configuration class for GPT model parameters."""
 
+    name: str = "gpt2"
+
     block_size: int = 1024  # Maximum sequence length
     vocab_size: int = 50257  # GPT-2 vocabulary size
     n_layer: int = 12  # Number of transformer layers
     n_head: int = 12  # Number of attention heads
     n_embd: int = 768  # Embedding dimension
+
+    @classmethod
+    def from_hydra_config(cls, cfg: DictConfig) -> "GPTConfig":
+        return hydra.utils.instantiate(cfg)
 
 
 class CausalSelfAttention(nn.Module):
@@ -138,38 +147,25 @@ class GPT(nn.Module):
         return logits, loss
 
     @classmethod
-    def from_pretrained(cls, model_type: str) -> "GPT":
+    def from_pretrained(cls, gpt_cnf: GPTConfig) -> "GPT":
         """Load a pre-trained GPT-2 model from HuggingFace.
 
         Args:
             model_type: One of 'gpt2', 'gpt2-medium', 'gpt2-large', or 'gpt2-xl'
+            cfg: Optional Hydra configuration
 
         Returns:
             A GPT model with weights loaded from the pre-trained model
         """
         from transformers import GPT2LMHeadModel
 
-        print(f"Loading weights from pretrained GPT: {model_type}")
-        available_configs: Dict[str, Dict[str, int]] = {
-            "gpt2": dict(n_layer=12, n_head=12, n_embd=768),  # 124M params
-            "gpt2-medium": dict(n_layer=24, n_head=16, n_embd=1024),  # 350M params
-            "gpt2-large": dict(n_layer=36, n_head=20, n_embd=1280),  # 774M params
-            "gpt2-xl": dict(n_layer=48, n_head=25, n_embd=1600),  # 1558M params
-        }
-        assert model_type in available_configs, (
-            f"Model type {model_type} not found in available configs"
-        )
-
-        config_args: Dict[str, int] = available_configs[model_type]
-        config_args["vocab_size"] = 50257
-        config_args["block_size"] = 1024
-        config = GPTConfig(**config_args)
-        model = GPT(config)
+        logger.info(f"Loading weights from pretrained GPT: {gpt_cnf.name}")
+        model = GPT(gpt_cnf)
 
         # Load state dictionaries
         sd: Dict[str, torch.Tensor] = model.state_dict()
         sd_keys: List[str] = [k for k in sd.keys() if not k.endswith(".attn.bias")]
-        model_hf = GPT2LMHeadModel.from_pretrained(model_type)
+        model_hf = GPT2LMHeadModel.from_pretrained(gpt_cnf.name)
         sd_hf: Dict[str, torch.Tensor] = model_hf.state_dict()
         sd_keys_hf: List[str] = [k for k in sd_hf.keys() if not k.endswith(".attn.masked_bias")]
         sd_keys_hf = [k for k in sd_keys_hf if not k.endswith(".attn.bias")]
@@ -199,7 +195,10 @@ class GPT(nn.Module):
         return model
 
     def configure_optimizers(
-        self, weight_decay: float, learning_rate: float, env: Any
+        self,
+        weight_decay: float,
+        learning_rate: float,
+        device_type: str,
     ) -> torch.optim.AdamW:
         """Configure the optimizer with weight decay applied only to 2D+ parameters."""
         param_dict: Dict[str, torch.nn.Parameter] = {
@@ -215,7 +214,7 @@ class GPT(nn.Module):
         ]
 
         fused_available: bool = "fused" in inspect.signature(torch.optim.AdamW).parameters
-        use_fused: bool = fused_available and env.device_type == "cuda"
+        use_fused: bool = fused_available and device_type == "cuda"
         optimizer = torch.optim.AdamW(
             optim_groups, lr=learning_rate, betas=(0.9, 0.95), eps=1e-8, fused=use_fused
         )

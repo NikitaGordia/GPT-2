@@ -1,7 +1,8 @@
 import os
 from pathlib import Path
-from typing import Any, Tuple, Union
+from typing import Tuple, Union
 
+from loguru import logger
 import numpy as np
 import torch
 
@@ -29,7 +30,12 @@ class DataLoaderLite:
     """
 
     def __init__(
-        self, data_dir: Union[str, Path], batch_size: int, seq_length: int, split: str, env: Any
+        self,
+        data_dir: Union[str, Path],
+        batch_size: int,
+        seq_length: int,
+        split: str,
+        ddp_config: Tuple[int, int],
     ):
         """Initialize the data loader.
 
@@ -43,11 +49,7 @@ class DataLoaderLite:
         self.B = batch_size
         self.T = seq_length
 
-        # Handle case where ddp_config might be None
-        if env.ddp_config is None:
-            self.rank, self.world_size = 0, 1
-        else:
-            self.rank, self.world_size = env.ddp_config
+        self.rank, self.world_size = ddp_config
 
         if split not in {"train", "val"}:
             raise ValueError(f"Split must be 'train' or 'val', got '{split}'")
@@ -62,7 +64,7 @@ class DataLoaderLite:
                 f"No shards found for split '{split}' in directory '{data_dir}'"
             )
 
-        env.logger(f"Found {len(self.shards)} shards for split '{split}'")
+        logger.info(f"Found {len(self.shards)} shards for split '{split}'")
         self.reset()
 
     def reset(self, to_shard: int = 0) -> None:

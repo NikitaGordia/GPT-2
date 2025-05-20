@@ -1,0 +1,19 @@
+
+hugging_face:
+  cache_dir: data/.cache/huggingface
+
+fineweb:
+  path: data/processed/fineweb_edu
+
+  remote_name: sample-10BT
+  shard_size: 100_000_000  # 100 million tokens per shard
+
+hellaswag:
+  split: val
+  eval_model: gpt2
+  cache_dir: data/.cache/hellaswag
+  urls:
+    train: https://raw.githubusercontent.com/rowanz/hellaswag/master/data/hellaswag_train.jsonl
+    val: https://raw.githubusercontent.com/rowanz/hellaswag/master/data/hellaswag_val.jsonl
+    test: https://raw.githubusercontent.com/rowanz/hellaswag/master/data/hellaswag_test.jsonl
+  chunk_size: 1024  # Size of chunks to download at a time

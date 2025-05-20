@@ -1,9 +1,13 @@
+from dataclasses import dataclass
 import os
+import sys
 import time
-from typing import Callable, Optional
+from typing import Tuple
 
+from loguru import logger
+from omegaconf import DictConfig
 import torch
-import typer
+from torch.distributed import init_process_group
 
 
 class Timeit:
@@ -46,34 +50,113 @@ class Timeit:
         return elapsed_time
 
 
+@dataclass
+class RuntimeEnvironment:
+    use_autocast: bool = False
+    use_tf32: bool = False
+    distributed_backend: str = "nccl"
+
+    ddp: bool = False
+    ddp_config: Tuple[int, int] = (0, 1)
+    ddp_local_rank: int = 0
+    device: str = None
+
+    @property
+    def ddp_rank(self) -> bool:
+        return self.ddp_config[0]
+
+    @property
+    def ddp_world_size(self) -> bool:
+        return self.ddp_config[1]
+
+    @property
+    def is_master(self) -> bool:
+        return self.ddp_rank == 0
+
+    @property
+    def device_type(self) -> str:
+        return "cuda" if self.device.startswith("cuda") else "cpu"
+
+    @property
+    def is_cuda(self) -> bool:
+        return self.device_type == "cuda"
+
+    @property
+    def use_cpu(self) -> bool:
+        return self.device == "cpu"
+
+    def setup_accelerators(self, device_mode) -> None:
+        ddp = int(os.environ.get("RANK", -1)) != -1
+        if ddp:
+            assert torch.cuda.is_available(), "DDP requires CUDA device"
+            init_process_group(backend=self.distributed_backend)
+            ddp_rank = int(os.environ["RANK"])
+            ddp_local_rank = int(os.environ["LOCAL_RANK"])
+            ddp_world_size = int(os.environ["WORLD_SIZE"])
+            device = f"cuda:{ddp_local_rank}"
+            torch.cuda.set_device(device)
+            ddp_config = (ddp_rank, ddp_world_size)
+            ddp = True
+        else:
+            ddp_config = (0, 1)
+            ddp_local_rank = 0
+            device = detect_device(device_mode)
+            ddp = False
+
+        self.ddp_config = ddp_config
+        self.ddp_local_rank = ddp_local_rank
+        self.device = device
+        self.ddp = ddp
+
+    @staticmethod
+    def from_hydra_config(cfg: DictConfig):
+        env = RuntimeEnvironment(
+            use_autocast=cfg.use_autocast,
+            use_tf32=cfg.use_tf32,
+            distributed_backend=cfg.distributed_backend,
+        )
+        env.setup_accelerators(cfg.device_mode)
+        return env
+
+
 def count_parameters(model: torch.nn.Module) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def detect_device(use_cpu: bool = False) -> str:
-    # Returns the torch device string ("cpu", "cuda", or "mps")
-    device = "cpu"
-    if not use_cpu and torch.cuda.is_available():
-        device = "cuda"
-    elif not use_cpu and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        device = "mps"
-    return device
+def detect_device(mode: str) -> str:
+    if mode == "auto":
+        device = "cpu"
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            device = "mps"
+        return device
+    else:
+        return mode
 
 
-def setup_typer(name: str) -> typer.Typer:
-    typer_obj = typer.Typer(name=name, pretty_exceptions_show_locals=False)
-    return typer_obj
+def configure_logger(rank, log_dir="logs/loguru"):
+    logger.remove()
 
+    os.makedirs(log_dir, exist_ok=True)
+    log_file_path = os.path.join(log_dir, f"rank_{rank}.log")
 
-def handle_cache_dir(cache_dir: Optional[str], sub_dir: str, log_fn: Callable[[str], None]) -> str:
-    cache_dir = os.path.join(handle_env(cache_dir, "CACHE_DIR", log_fn), sub_dir)
-    return cache_dir
+    logger.add(
+        log_file_path,
+        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+        level="DEBUG",
+        rotation="100 MB",
+        enqueue=True,
+        diagnose=True,
+    )
 
+    if rank == 0:
+        logger.add(
+            sys.stderr,
+            level="DEBUG",
+            colorize=True,
+            enqueue=True,
+            diagnose=False,
+        )
 
-def handle_env(value: Optional[str], key: str, log_fn: Callable[[str], None]) -> str:
-    if value is None:
-        value = os.environ.get(key)
-        if value is None:
-            raise ValueError(f"{key} not specified and environment variable not set")
-        log_fn(f"Using {key} environment variable: {value}")
-    return value
+    logger.info(f"Logger configured for rank {rank}. Logging to {log_file_path}")

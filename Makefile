@@ -12,9 +12,14 @@ DOCKER_BUILDKIT=1
 #################################################################################
 
 ## Download and process fineweb dataset
-.PHONY: fineweb
-fineweb:
-	python -m gpt.fineweb.py data/processed/fineweb_edu
+.PHONY: download-fineweb
+download-fineweb:
+	python -m gpt.fineweb
+
+## Cache hellaswag dataset
+.PHONY: cache-hellaswag
+cache-hellaswag:
+	python -m gpt.hellaswag.dataset
 
 ## Train the model
 .PHONY: train
@@ -48,7 +53,7 @@ docker-train:
 ## Debug Docker container with interactive shell
 .PHONY: docker-debug
 docker-debug:
-	docker compose run --rm base /bin/bash
+	docker compose run --rm train /bin/bash
 
 
 #################################################################################
