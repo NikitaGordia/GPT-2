@@ -30,7 +30,7 @@ pull_data_with_dvc() {
   log "Pulling data using DVC..."
   # Configure DVC to not require git only if .git directory doesn't exist
   if [ ! -d ".git" ]; then
-    log "No .git directory found, configuring DVC to work without git..."
+    log "No .git directory found, configuring DVC to work without git... (It's fine if it's inside a docker container)"
     dvc config core.no_scm true
   fi
   if dvc pull; then
@@ -44,21 +44,10 @@ pull_data_with_dvc() {
 
 # Function to download Fineweb dataset
 download_fineweb_data() {
-  local fineweb_path=$1
-  local cache_dir=$2
-
-  if [ -z "$fineweb_path" ]; then
-    error "FINEWEB_PATH parameter not provided"
-    return 1
-  fi
-
-  log "Downloading Fineweb dataset to $fineweb_path..."
-
-  # Create directory if it doesn't exist
-  mkdir -p "$(dirname "$fineweb_path")"
+  log "Downloading Fineweb dataset..."
 
   # Use the Python module to download the dataset
-  if python -m gpt.fineweb --local-dir "$fineweb_path" --cache-dir "$cache_dir"; then
+  if python -m gpt.fineweb; then
     success "Fineweb dataset downloaded successfully"
     return 0
   else
@@ -67,24 +56,11 @@ download_fineweb_data() {
   fi
 }
 
-# Function to download HellaSwag dataset (val split only)
 download_hellaswag_data() {
-  local cache_dir=$1
+  log "Downloading HellaSwag..."
 
-  if [ -z "$cache_dir" ]; then
-    error "CACHE_DIR parameter not provided"
-    return 1
-  fi
-
-  log "Downloading HellaSwag val split to $cache_dir..."
-
-  # Create directory if it doesn't exist
-  mkdir -p "$cache_dir"
-
-  # Download only the validation split using the Python module
-  log "Downloading HellaSwag val split..."
-  if python -m gpt.hellaswag download-dataset "val" --cache-dir "$cache_dir"; then
-    success "HellaSwag val split downloaded successfully"
+  if python -m gpt.hellaswag.dataset; then
+    success "HellaSwag downloaded successfully"
     return 0
   else
     error "Failed to download HellaSwag val split"
@@ -96,13 +72,11 @@ download_hellaswag_data() {
 main() {
   # Get parameters - no fallback to environment variables
   local use_dvc="$1"
-  local fineweb_path="$2"
-  local cache_dir="$3"
 
   # Check if all required parameters are provided
-  if [ -z "$use_dvc" ] || [ -z "$fineweb_path" ] || [ -z "$cache_dir" ]; then
+  if [ -z "$use_dvc" ]; then
     error "Missing required parameters"
-    error "Usage: $0 <USE_DVC> <FINEWEB_PATH> <CACHE_DIR>"
+    error "Usage: $0 <USE_DVC>"
     exit 1
   fi
 
@@ -121,11 +95,11 @@ main() {
 
     # Download Fineweb dataset
     local fineweb_success=false
-    download_fineweb_data "$fineweb_path" "$cache_dir" && fineweb_success=true
+    download_fineweb_data && fineweb_success=true
 
     # Download HellaSwag dataset
     local hellaswag_success=false
-    download_hellaswag_data "$cache_dir" && hellaswag_success=true
+    download_hellaswag_data && hellaswag_success=true
 
     # Check which datasets failed, if any
     local failed_datasets=""

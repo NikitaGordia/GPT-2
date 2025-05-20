@@ -1,5 +1,7 @@
 import math
 
+from omegaconf import DictConfig
+
 
 class CosineDecayWarmup:
     """Learning rate scheduler with linear warmup and cosine decay."""
@@ -17,6 +19,16 @@ class CosineDecayWarmup:
         self.min_lr = min_lr
         self.warmup_steps = warmup_steps
         self.max_steps = max_steps
+
+    @classmethod
+    def from_hydra_config(cls, cfg: DictConfig) -> "CosineDecayWarmup":
+        """Create a CosineDecayWarmup from a Hydra configuration."""
+        return cls(
+            max_lr=cfg.lr.max,
+            min_lr=cfg.lr.max * cfg.lr.min_factor,
+            warmup_steps=cfg.lr.warmup_steps,
+            max_steps=cfg.max_steps,
+        )
 
     def get_lr(self, it: int) -> float:
         """Get learning rate for the current iteration.

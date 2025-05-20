@@ -1,0 +1,33 @@
+# Training configuration
+
+# Batch size parameters
+batch_size: 524288  # Total batch size for training (2^19)
+micro_batch_size: 4  # Micro batch size for gradient accumulation
+
+# Sequence parameters
+seq_length: 1024  # Sequence length for training
+
+# Optimizer parameters
+optimizer:
+  weight_decay: 0.1  # Weight decay
+  grad_clip: 1.0  # Gradient clipping value
+
+# Learning rate parameters
+lr:
+  max: 6e-4  # Maximum learning rate
+  min_factor: 0.1  # Minimum learning rate factor (min_lr = max_lr * min_factor)
+  warmup_steps: 715  # Number of warmup steps
+
+# Training steps
+max_steps: 19073  # Maximum number of training steps
+
+# Validation parameters
+validation:
+  step: 250  # Validate every N steps
+  n_steps: 20  # Number of validation steps
+  hellaswag: 
+    enabled: true 
+    encoder: gpt2
+
+# Model compilation
+compile_model: false  # Use torch.compile

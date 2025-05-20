@@ -12,8 +12,6 @@ services:
       - ./.dvc/cache:/trainer/.dvc/cache
     environment:
       - USE_DVC=1
-      - FINEWEB_PATH=/trainer/data/processed/fineweb_edu
-      - CACHE_DIR=/trainer/data/.cache
       - PYTHONPATH=/trainer
       - PYTHONUNBUFFERED=1
     secrets:
@@ -31,7 +29,7 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    command: ["torchrun", "--nproc_per_node=1", "gpt/train.py"]
+    command: ["torchrun", "--nproc_per_node=1", "-m", "gpt.train"]
 
 secrets:
   aws_credentials:

@@ -1,0 +1,12 @@
+# GPT-2 model configuration
+
+name: gpt2-large
+
+# Model architecture parameters
+block_size: 1024  # Maximum sequence length
+vocab_size: 50257 # GPT-2 vocabulary size
+n_layer: 36       # Number of transformer layers
+n_head: 20        # Number of attention heads
+n_embd: 1280      # Embedding dimension
+
+_target_: gpt.model.GPTConfig

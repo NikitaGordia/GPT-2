@@ -16,7 +16,7 @@ fi
 # Run pull_data.sh to prepare the datasets
 echo "Preparing datasets..."
 chmod +x ./scripts/pull_data.sh
-bash ./scripts/pull_data.sh "$USE_DVC" "$FINEWEB_PATH" "$CACHE_DIR"
+bash ./scripts/pull_data.sh "$USE_DVC"
 
 # Switch user
 exec gosu trainer "$@"
