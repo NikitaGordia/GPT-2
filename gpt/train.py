@@ -1,5 +1,3 @@
-from typing import Callable
-
 import hydra
 from loguru import logger
 from omegaconf import DictConfig
@@ -74,25 +72,6 @@ def validation(
         logger.info(
             f"hs_val Accuracy: {num_correct / num_total * 100:.1f}%, NormAccuracy: {num_correct_norm / num_total * 100:.1f}.%"
         )
-
-
-def setup_logger(master_process: bool, log_file: str) -> Callable[[str], None]:
-    """Set up logging based on whether this is the master process.
-
-    Args:
-        master_process: Whether this is the master process
-        log_file: Path to the log file
-
-    Returns:
-        A logging function that takes a string message
-    """
-    if not master_process:
-        # Create a no-op logger for non-master processes
-        return lambda _: None
-
-    logger.add(log_file, rotation="10 MB", level="INFO")
-    logger.info(f"Logs will be saved to {log_file}")
-    return logger.info
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
