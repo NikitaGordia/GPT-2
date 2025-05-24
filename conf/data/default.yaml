@@ -10,7 +10,6 @@ fineweb:
 
 hellaswag:
   split: val
-  eval_model: gpt2
   cache_dir: data/.cache/hellaswag
   urls:
     train: https://raw.githubusercontent.com/rowanz/hellaswag/master/data/hellaswag_train.jsonl

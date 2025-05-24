@@ -1,7 +1,7 @@
 import functools
 import multiprocessing as mp
 import os
-from typing import Optional, Tuple
+from typing import Optional
 
 from datasets import Dataset, load_dataset
 import hydra
@@ -142,7 +142,9 @@ class ShardBuffer:
 class FinewebProcessor:
     """Class for downloading and processing the Fineweb dataset."""
 
-    def __init__(self, local_dir: str, cache_dir: str, remote_name: str, shard_size: int):
+    def __init__(
+        self, local_dir: str, encoder: Encoding, cache_dir: str, remote_name: str, shard_size: int
+    ):
         """Initialize the Fineweb processor.
 
         Args:
@@ -155,6 +157,7 @@ class FinewebProcessor:
         self.cache_dir = cache_dir
         self.remote_name = remote_name
         self.shard_size = shard_size
+        self.encoder = encoder
 
     def setup_directories(self) -> None:
         """Create output directories if they don't exist."""
@@ -179,25 +182,14 @@ class FinewebProcessor:
             logger.error(f"Failed to load dataset: {e}")
             raise
 
-    def setup_tokenizer(self) -> Tuple[Encoding, int]:
-        """Set up the tokenizer.
-
-        Returns:
-            Tuple of (encoding, end-of-text token)
-        """
-        logger.info("Setting up tokenizer")
-        enc = tiktoken.get_encoding("gpt2")
-        eot = enc._special_tokens["<|endoftext|>"]
-        return enc, eot
-
     def process(self) -> None:
         """Process the Fineweb dataset."""
         self.setup_directories()
         dataset = self.load_dataset()
-        enc, eot = self.setup_tokenizer()
+        eot = self.encoder._special_tokens["<|endoftext|>"]
 
         # Create a partial function with the tokenizer arguments
-        tokenize_with_args = functools.partial(tokenize, enc=enc, eot=eot)
+        tokenize_with_args = functools.partial(tokenize, enc=self.encoder, eot=eot)
 
         # Set up multiprocessing
         nprocs = max(1, os.cpu_count() // 2)
@@ -223,8 +215,13 @@ def download_and_process(cfg: DictConfig) -> None:
     """
 
     fw_cfg = cfg.data.fineweb
+    encoder = tiktoken.get_encoding(cfg.tokens.encoding)
     processor = FinewebProcessor(
-        fw_cfg.path, cfg.data.hugging_face.cache_dir, fw_cfg.remote_name, fw_cfg.shard_size
+        fw_cfg.path,
+        encoder,
+        cfg.data.hugging_face.cache_dir,
+        fw_cfg.remote_name,
+        fw_cfg.shard_size,
     )
     processor.process()
 

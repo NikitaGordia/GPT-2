@@ -25,9 +25,7 @@ max_steps: 19073  # Maximum number of training steps
 validation:
   step: 250  # Validate every N steps
   n_steps: 20  # Number of validation steps
-  hellaswag: 
-    enabled: true 
-    encoder: gpt2
+  hellaswag: true
 
 # Model compilation
 compile_model: false  # Use torch.compile

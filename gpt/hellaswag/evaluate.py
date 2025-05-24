@@ -178,10 +178,10 @@ def evaluate_pretrained(cfg: DictConfig) -> None:
 
     hs_cfg = cfg.data.hellaswag
 
-    model = GPT2LMHeadModel.from_pretrained(hs_cfg.eval_model)
+    model = GPT2LMHeadModel.from_pretrained(cfg.model.name)
     model.to(env.device)
 
-    encoder = tiktoken.get_encoding(hs_cfg.eval_model)
+    encoder = tiktoken.get_encoding(cfg.tokens.encoding)
 
     def model_fn(x: torch.Tensor) -> Tuple[torch.Tensor, None]:
         return model(x).logits, None
