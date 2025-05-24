@@ -1,0 +1,4 @@
+prompt: "Malfoy was the surname of a wealthy pure-blood wizarding family and one of the Sacred Twenty-Eight. They lived in Malfoy Manor in Wiltshire, England. The Malfoys were related to many other pure-blood families, including the Blacks, Lestranges, Greengrasses, and Rosiers. They were also related to the Tonks and Lupin families, of mixed wizarding and Muggle heritage, much to the Malfoys' disdain,[9] as they were pure-blood supremacists, although they were not themselves against marrying Half-bloods. The Malfoys gained a reputation for their pure-blood supremacy and heritage. During the First and Second Wizarding Wars, they supported Lord Voldemort and some members were even Death Eaters under his command."
+
+parallel_sequences: 5
+max_length: 500
